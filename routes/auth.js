@@ -1,9 +1,13 @@
 const express = require('express');
-const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const db = require('../index'); 
-const keys = require('../config');
+const router = express.Router();
+
+// 引入 sqlite3
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
+const dbPath = path.join(__dirname, '..', 'db', 'database.db');
+const db = new sqlite3.Database(dbPath);
 
 // 注册
 router.post('/register', (req, res) => {
@@ -39,7 +43,7 @@ router.post('/login', (req, res) => {
         const payload = { id: user.id, name: user.name };
         jwt.sign(
           payload,
-          keys.secretOrKey,
+          'yourSecretKey', // 要改成你的密鑰
           { expiresIn: 3600 },
           (err, token) => {
             res.json({

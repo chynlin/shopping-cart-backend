@@ -1,22 +1,39 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../index'); 
 
-// 获取所有产品
-router.get('/', (req, res) => {
-  db.all('SELECT * FROM products', (err, products) => {
-    if (err) return res.status(404).json({ noproductsfound: 'No products found' });
+// 引入 sqlite3
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
+const dbPath = path.join(__dirname, '..', 'db', 'database.db');
+const db = new sqlite3.Database(dbPath);
+
+// 商品列表
+router.get('/product-list', (req, res) => {
+  const query = 'SELECT id, name, price, description, strftime("%s", date) AS created FROM products';
+  db.all(query, [], (err, products) => {
+    if (err) return res.status(500).json({ error: err.message });
     res.json(products);
   });
 });
 
-// 添加新产品
-router.post('/', (req, res) => {
+router.post('/create-product', (req, res) => {
+  console.log(req.body);
   const { name, price, description } = req.body;
-  db.run('INSERT INTO products (name, price, description) VALUES (?, ?, ?)', [name, price, description], function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ id: this.lastID });
+
+  // 檢查必填欄位是否存在
+  if (!name || !price) {
+    return res.status(400).json({ error: 'Name and price are required' });
+  }
+
+  const query = 'INSERT INTO products (name, price, description) VALUES (?, ?, ?)';
+  db.run(query, [name, price, description], function (err) {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+
+    res.status(201).json({ message: 'Product added successfully', id: this.lastID });
   });
 });
+
 
 module.exports = router;
