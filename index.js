@@ -9,7 +9,7 @@ const products = require('./routes/products');
 const cart = require('./routes/cart');
 const app = express();
 // SQLite Database setup
-const dbPath = path.join(__dirname, 'db' , 'database.db');
+const dbPath = path.join(__dirname, 'db', 'database.db');
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error(err.message);
@@ -30,17 +30,16 @@ const initDatabase = async () => {
           date TEXT DEFAULT CURRENT_TIMESTAMP
         )
       `);
-
       await db.run(`
         CREATE TABLE IF NOT EXISTS products (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT NOT NULL,
           price REAL NOT NULL,
+          image TEXT,
           description TEXT,
-          date TEXT DEFAULT CURRENT_TIMESTAMP
+          date DATE DEFAULT CURRENT_TIMESTAMP
         )
       `);
-
       resolve();
     });
   });
@@ -54,14 +53,15 @@ initDatabase().then(() => {
   app.use(passport.initialize());
 
   // Routes
-  app.use('/api/users', users);
+  app.use('/api/user', users);
   app.use('/api/products', products);
   app.use('/api/cart', cart);
 
   const port = process.env.PORT || 3001;
 
-  app.listen(port, () => console.log(`Server up and running on port ${port} !`));
+  app.listen(port, () =>
+    console.log(`Server up and running on port ${port} !`)
+  );
 });
-
 
 module.exports = db; // 导出数据库实例
