@@ -7,6 +7,7 @@ const path = require('path');
 const users = require('./routes/auth');
 const products = require('./routes/products');
 const cart = require('./routes/cart');
+const main = require('./routes/main'); // 新增的 main 路由
 const app = express();
 // SQLite Database setup
 const dbPath = path.join(__dirname, 'db', 'database.db');
@@ -40,12 +41,29 @@ const initDatabase = async () => {
           date DATE DEFAULT CURRENT_TIMESTAMP
         )
       `);
+      await db.run(`
+        CREATE TABLE IF NOT EXISTS main_info (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          notice TEXT,
+          banner TEXT
+        )
+      `);
+      // 插入初始数据
+      const initData = {
+        notice: 'Welcome to our site!',
+        banner: JSON.stringify([]),
+      };
+      await db.run('INSERT INTO main_info (notice, banner) VALUES (?, ?)', [
+        initData.notice,
+        initData.banner,
+      ]);
       resolve();
     });
   });
 };
 
 initDatabase().then(() => {
+  app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
   // Bodyparser middleware
   app.use(bodyParser.urlencoded({ extended: false }));
   app.use(bodyParser.json());
@@ -56,6 +74,7 @@ initDatabase().then(() => {
   app.use('/api/user', users);
   app.use('/api/products', products);
   app.use('/api/cart', cart);
+  app.use('/api/main', main); // 新增的 main 路由
 
   const port = process.env.PORT || 3001;
 

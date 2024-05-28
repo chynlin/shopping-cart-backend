@@ -16,18 +16,18 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 // 商品列表
-router.get('/product-list', (req, res) => {
+router.get('/list', (req, res) => {
   const query =
-    'SELECT id, name, price, description, strftime("%s", date) AS created FROM products';
+    'SELECT id, name, price, image, description, strftime("%s", date) AS created FROM products';
   db.all(query, [], (err, products) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(products);
   });
 });
 
-router.post('/create-product', upload.single('image'), (req, res) => {
+router.post('/create', upload.single('image'), (req, res) => {
   const { name, price, description } = req.body;
-  const image = req.file ? req.file.path : '';
+  const image = req.file ? '/' + req.file.path : null;
 
   // 檢查必填欄位是否存在
   if (!name || !price) {
