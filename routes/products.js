@@ -18,7 +18,7 @@ const upload = multer({ storage: storage });
 // 商品列表
 router.get('/list', (req, res) => {
   const query =
-    'SELECT id, name, price, image, description, strftime("%s", date) AS created FROM products';
+    'SELECT id, name, price, image, description, strftime("%s", date) AS created FROM products ORDER BY date DESC';
   db.all(query, [], (err, products) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(products);
