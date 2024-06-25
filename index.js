@@ -1,65 +1,40 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const sqlite3 = require('sqlite3').verbose();
 const passport = require('passport');
 const path = require('path');
+const { sequelize, MainInfo } = require('./models');
 
-const users = require('./routes/auth');
+const auth = require('./routes/auth');
+const user = require('./routes/user');
 const products = require('./routes/products');
 const cart = require('./routes/cart');
 const main = require('./routes/main'); // 新增的 main 路由
+const admin = require('./routes/admin');
+const roles = require('./routes/roles');
+const groups = require('./routes/group');
+const brands = require('./routes/brand');
+
 const app = express();
-// SQLite Database setup
-const dbPath = path.join(__dirname, 'db', 'database.db');
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error(err.message);
-  } else {
-    console.log('Connected to the SQLite database.');
-  }
-});
 
 const initDatabase = async () => {
-  await new Promise((resolve, reject) => {
-    db.serialize(async () => {
-      await db.run(`
-        CREATE TABLE IF NOT EXISTS users (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          name TEXT NOT NULL,
-          email TEXT NOT NULL UNIQUE,
-          password TEXT NOT NULL,
-          date TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
-      await db.run(`
-        CREATE TABLE IF NOT EXISTS products (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          name TEXT NOT NULL,
-          price REAL NOT NULL,
-          image TEXT,
-          description TEXT,
-          date DATE DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
-      await db.run(`
-        CREATE TABLE IF NOT EXISTS main_info (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          notice TEXT,
-          banner TEXT
-        )
-      `);
-      // 插入初始数据
-      const initData = {
-        notice: 'Welcome to our site!',
-        banner: JSON.stringify([]),
-      };
-      await db.run('INSERT INTO main_info (notice, banner) VALUES (?, ?)', [
-        initData.notice,
-        initData.banner,
-      ]);
-      resolve();
-    });
-  });
+  try {
+    await sequelize.sync();
+    console.log('Database synchronized successfully.');
+
+    // 插入初始数据
+    const initData = {
+      notice: 'Welcome to our site!',
+      banner: JSON.stringify([]),
+    };
+
+    // 检查是否存在初始数据，如果不存在则插入
+    const mainInfo = await MainInfo.findOne();
+    if (!mainInfo) {
+      await MainInfo.create(initData);
+    }
+  } catch (error) {
+    console.error('Error initializing database:', error);
+  }
 };
 
 initDatabase().then(() => {
@@ -71,10 +46,15 @@ initDatabase().then(() => {
   app.use(passport.initialize());
 
   // Routes
-  app.use('/api/user', users);
+  app.use('/api/auth', auth);
+  app.use('/api/user', user);
   app.use('/api/products', products);
   app.use('/api/cart', cart);
-  app.use('/api/main', main); // 新增的 main 路由
+  app.use('/api/main', main);
+  app.use('/api/admin', admin);
+  app.use('/api/roles', roles);
+  app.use('/api/group', groups);
+  app.use('/api/brand', brands);
 
   const port = process.env.PORT || 3001;
 
@@ -82,5 +62,12 @@ initDatabase().then(() => {
     console.log(`Server up and running on port ${port} !`)
   );
 });
+const checkConstraints = async () => {
+  const constraints = await sequelize.query(
+    "PRAGMA foreign_key_list('Admins')"
+  );
+  console.log('Admins Constraints:', constraints);
+};
 
-module.exports = db; // 导出数据库实例
+checkConstraints();
+module.exports = sequelize; // 导出 Sequelize 实例

@@ -5,7 +5,7 @@ const sqlite3 = require('sqlite3').verbose();
 const router = express.Router();
 const dbPath = path.join(__dirname, '..', 'db', 'database.db');
 const db = new sqlite3.Database(dbPath);
-
+const createResponse = require('../utils/responseHelper'); // 引入响应助手函数
 // 设置上传目录
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -18,7 +18,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 // 获取 main/info
-router.get('/info', (req, res) => {
+router.post('/info', (req, res) => {
   const query = 'SELECT notice, banner FROM main_info WHERE id = 1';
   db.get(query, (err, row) => {
     if (err) {
@@ -30,6 +30,16 @@ router.get('/info', (req, res) => {
     };
     res.json(result);
   });
+});
+
+// 获取 手機區碼
+router.post('/country-codes', (req, res) => {
+  const countryCodes = [
+    { country: 'CN', code: '+86' },
+    { country: 'HK', code: '+852' },
+    { country: 'TW', code: '+886' },
+  ];
+  res.json(createResponse(countryCodes));
 });
 
 // 上传 banner 并新增到 main/info 的 banner 数组中
@@ -62,9 +72,10 @@ router.post('/banner-create', upload.single('image'), (req, res) => {
   });
 });
 
-// 删除 banner 根据传递的 id 从 main/info 的 banner 数组中删除
-router.delete('/banner-delete/:id', (req, res) => {
-  const bannerId = parseInt(req.params.id, 10);
+// 删除 banner 根据传递的 id 从 main_info 的 banner 数组中删除
+router.post('/banner-delete', (req, res) => {
+  const { id } = req.body;
+  const bannerId = parseInt(id, 10);
 
   const querySelect = 'SELECT banner FROM main_info WHERE id = 1';
   db.get(querySelect, (err, row) => {
