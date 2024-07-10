@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const sequelize = new Sequelize({
   dialect: 'sqlite',
   storage: path.join(__dirname, '../db/database.sqlite'),
+  logging: console.log, // 添加日志记录以查看实际执行的 SQL 语句
 });
 
 const generateNumericId = async () => {
@@ -132,7 +133,24 @@ const Group = sequelize.define(
     timestamps: false,
   }
 );
-
+const Brand = sequelize.define(
+  'Brand',
+  {
+    name: DataTypes.STRING,
+    logo: {
+      type: DataTypes.STRING, // 使用字符串存储图片路径或URL
+      allowNull: true,
+    },
+    description: DataTypes.TEXT,
+    created: {
+      type: DataTypes.DATE,
+      defaultValue: () => Math.floor(Date.now() / 1000),
+    },
+  },
+  {
+    timestamps: false,
+  }
+);
 const Product = sequelize.define(
   'Product',
   {
@@ -149,7 +167,14 @@ const Product = sequelize.define(
         this.setDataValue('image', JSON.stringify(value));
       },
     },
-    brand: DataTypes.STRING,
+    brand_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: Brand,
+        key: 'id',
+      },
+    },
     description: DataTypes.TEXT,
     group_id: {
       type: DataTypes.INTEGER,
@@ -172,25 +197,8 @@ const Product = sequelize.define(
     timestamps: false,
   }
 );
-const Brand = sequelize.define(
-  'Brand',
-  {
-    name: DataTypes.STRING,
-    logo: {
-      type: DataTypes.STRING, // 使用字符串存储图片路径或URL
-      allowNull: true,
-    },
-    description: DataTypes.TEXT,
-    created: {
-      type: DataTypes.DATE,
-      defaultValue: () => Math.floor(Date.now() / 1000),
-    },
-  },
-  {
-    timestamps: false,
-  }
-);
 
+Product.belongsTo(Brand, { foreignKey: 'brand_id', as: 'brand' });
 Product.belongsTo(Group, { foreignKey: 'group_id', as: 'group' });
 
 const MainInfo = sequelize.define(
@@ -203,6 +211,173 @@ const MainInfo = sequelize.define(
     timestamps: false,
   }
 );
+const Inventory = sequelize.define(
+  'Inventory',
+  {
+    product_id: {
+      type: DataTypes.INTEGER,
+      references: {
+        model: Product,
+        key: 'id',
+      },
+    },
+    quantity: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+    },
+    last_updated: {
+      type: DataTypes.DATE,
+      defaultValue: () => Math.floor(Date.now() / 1000),
+    },
+  },
+  {
+    timestamps: false,
+  }
+);
+Product.hasMany(Inventory, { foreignKey: 'product_id' });
+Inventory.belongsTo(Product, { foreignKey: 'product_id' });
+
+const InventoryHistory = sequelize.define(
+  'InventoryHistory',
+  {
+    product_id: {
+      type: DataTypes.INTEGER,
+      references: {
+        model: Product,
+        key: 'id',
+      },
+    },
+    change_type: {
+      type: DataTypes.STRING,
+    },
+    quantity: {
+      type: DataTypes.INTEGER,
+    },
+    date: {
+      type: DataTypes.DATE,
+      defaultValue: () => Math.floor(Date.now() / 1000),
+    },
+    remark: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+  },
+  {
+    timestamps: false,
+  }
+);
+
+Product.hasMany(InventoryHistory, { foreignKey: 'product_id' });
+InventoryHistory.belongsTo(Product, { foreignKey: 'product_id' });
+
+const Config = sequelize.define(
+  'Config',
+  {
+    key: {
+      type: DataTypes.STRING,
+      primaryKey: true,
+    },
+    value: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+  },
+  {
+    timestamps: false,
+  }
+);
+// 定义 Order 模型
+const Order = sequelize.define('Order', {
+  orderNumber: {
+    type: DataTypes.STRING(8),
+    allowNull: true,
+    primaryKey: true,
+  },
+  customer_id: {
+    type: DataTypes.STRING(8), // 假设你的用户ID是字符串类型，如果是整数类型请修改为 INTEGER
+    references: {
+      model: User, // 修改为正确的表名
+      key: 'id',
+    },
+  },
+  status: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  totalAmount: {
+    type: DataTypes.FLOAT,
+    allowNull: false,
+  },
+  logisticsCompany: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  trackingNumber: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  createdAt: {
+    type: DataTypes.DATE,
+    defaultValue: () => Math.floor(Date.now() / 1000),
+  },
+  updatedAt: {
+    type: DataTypes.DATE,
+    defaultValue: () => Math.floor(Date.now() / 1000),
+  },
+});
+
+Order.beforeCreate(async (order) => {
+  order.orderNumber = await generateNumericId();
+});
+
+// 定义 OrderItem 模型
+const OrderItem = sequelize.define('OrderItem', {
+  id: {
+    type: DataTypes.INTEGER,
+    autoIncrement: true,
+    primaryKey: true,
+  },
+  order_id: {
+    type: DataTypes.STRING(8),
+    references: {
+      model: Order, // 关联到 Orders 表
+      key: 'orderNumber',
+    },
+    allowNull: false,
+  },
+  product_id: {
+    type: DataTypes.INTEGER,
+    references: {
+      model: Product, // 关联到 Products 表
+      key: 'id',
+    },
+    allowNull: false,
+  },
+  quantity: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+  },
+  price: {
+    type: DataTypes.FLOAT,
+    allowNull: false,
+  },
+  createdAt: {
+    type: DataTypes.DATE,
+    defaultValue: () => Math.floor(Date.now() / 1000),
+  },
+  updatedAt: {
+    type: DataTypes.DATE,
+    defaultValue: () => Math.floor(Date.now() / 1000),
+  },
+});
+
+// 模型关联
+User.hasMany(Order, { foreignKey: 'customer_id', as: 'order' });
+Order.belongsTo(User, { foreignKey: 'customer_id', as: 'customer' });
+
+Order.hasMany(OrderItem, { foreignKey: 'order_id', as: 'items' });
+OrderItem.belongsTo(Order, { foreignKey: 'order_id', as: 'order' });
+OrderItem.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
 
 sequelize.sync();
 
@@ -215,4 +390,9 @@ module.exports = {
   MainInfo,
   Role,
   Brand,
+  Inventory,
+  InventoryHistory,
+  Config,
+  Order,
+  OrderItem,
 };

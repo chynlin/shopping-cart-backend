@@ -2,15 +2,20 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const router = express.Router();
-const { Product, Group } = require('../models');
+const { Product, Group, Brand, Inventory } = require('../models');
 const multer = require('multer');
 const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const fs = require('fs'); // 引入 fs 模块
+const path = require('path'); // 引入 path 模块
 const dbPath = path.join(__dirname, '..', 'db', 'database.db');
 const db = new sqlite3.Database(dbPath);
 const auth = require('../middleware/admin');
 const createResponse = require('../utils/responseHelper'); // 引入响应助手函数
 const { Sequelize } = require('sequelize'); // 导入Sequelize
+const { log } = require('console');
+
+const { Op } = Sequelize; // 引入 Op
+
 // 配置 multer 存储选项
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -43,7 +48,7 @@ router.post('/list', auth, async (req, res) => {
     whereConditions.group_id = group;
   }
   if (brand) {
-    whereConditions.brand = brand;
+    whereConditions.brand_id = brand;
   }
 
   try {
@@ -55,7 +60,6 @@ router.post('/list', auth, async (req, res) => {
         'id',
         'name',
         'price',
-        'brand',
         'description',
         'image',
         'status',
@@ -66,6 +70,11 @@ router.post('/list', auth, async (req, res) => {
           model: Group,
           attributes: ['id', 'title'],
           as: 'group',
+        },
+        {
+          model: Brand,
+          attributes: ['id', 'name'],
+          as: 'brand',
         },
       ],
     });
@@ -82,6 +91,9 @@ router.post('/list', auth, async (req, res) => {
         ...product.toJSON(),
         created: new Date(product.created).getTime(),
         image: images,
+        brand: product.brand
+          ? { id: product.brand.id, name: product.brand.name }
+          : null,
         group: product.group
           ? { id: product.group.id, title: product.group.title }
           : null,
@@ -112,6 +124,11 @@ router.post('/info', auth, async (req, res) => {
           attributes: ['id', 'title'],
           as: 'group',
         },
+        {
+          model: Brand,
+          attributes: ['id', 'name'],
+          as: 'brand',
+        },
       ],
     });
 
@@ -130,6 +147,9 @@ router.post('/info', auth, async (req, res) => {
       createResponse({
         ...product.toJSON(),
         created: new Date(product.created).getTime(),
+        brand: product.brand
+          ? { id: product.brand.id, name: product.brand.name }
+          : null,
         image: images,
         group: product.group
           ? { id: product.group.id, title: product.group.title }
@@ -140,10 +160,10 @@ router.post('/info', auth, async (req, res) => {
     res.json(createResponse(null, null, true, err.message));
   }
 });
-//新增產品
+
+// 新增產品
 router.post('/create', auth, upload.array('images', 30), async (req, res) => {
-  const { name, price, brand, description, status, group_id } = req.body;
-  // 处理上传的文件
+  const { name, price, brand_id, description, status, group_id } = req.body;
   const images = req.files
     ? req.files.map((file, index) => ({
         id: index + 1,
@@ -152,15 +172,26 @@ router.post('/create', auth, upload.array('images', 30), async (req, res) => {
     : [];
 
   try {
+    // 创建产品
     const newProduct = await Product.create({
       name,
       price,
-      brand,
+      brand_id,
       description,
-      image: JSON.stringify(images), // 将图片信息保存为JSON字符串
+      image: JSON.stringify(images),
       status,
       group_id,
     });
+
+    console.log('Product created with ID:', newProduct.id);
+
+    // 使用创建后的新产品的 id 创建库存记录
+    await Inventory.create({
+      product_id: newProduct.id,
+      quantity: 0,
+    });
+
+    console.log('Inventory created for product ID:', newProduct.id);
 
     res.json(
       createResponse({
@@ -169,13 +200,14 @@ router.post('/create', auth, upload.array('images', 30), async (req, res) => {
       })
     );
   } catch (err) {
+    console.error('Error creating product or inventory:', err.message);
     res.json(createResponse(null, null, true, err.message));
   }
 });
 
 // 编辑产品
 router.post('/edit', auth, upload.array('images', 30), async (req, res) => {
-  const { id, name, price, brand, description, image, status } = req.body;
+  const { id, name, price, brand_id, group_id, description, status } = req.body;
   const images = req.files;
   try {
     const product = await Product.findByPk(id);
@@ -186,7 +218,8 @@ router.post('/edit', auth, upload.array('images', 30), async (req, res) => {
 
     product.name = name || product.name;
     product.price = price || product.price;
-    product.brand = brand || product.brand;
+    product.brand_id = brand_id || product.brand_id;
+    product.group_id = group_id || product.group_id;
     product.description = description || product.description;
     if (images && images.length > 0) {
       const existingImages = product.image ? JSON.parse(product.image) : [];
@@ -278,7 +311,7 @@ router.post('/delete-image', auth, async (req, res) => {
     }
 
     const images = product.image ? JSON.parse(product.image) : [];
-    const imageIndex = images.findIndex((img) => img.id === image_id);
+    const imageIndex = images.findIndex((img) => img.id == image_id);
 
     if (imageIndex === -1) {
       return res.json(createResponse(null, null, true, 'Image not found'));

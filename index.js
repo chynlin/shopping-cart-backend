@@ -13,24 +13,28 @@ const admin = require('./routes/admin');
 const roles = require('./routes/roles');
 const groups = require('./routes/group');
 const brands = require('./routes/brand');
+const inventory = require('./routes/inventory');
+const order = require('./routes/order');
 
 const app = express();
 
+// 初始化数据库并同步模型
 const initDatabase = async () => {
   try {
-    await sequelize.sync();
+    await sequelize.sync(); // 同步所有模型到数据库
     console.log('Database synchronized successfully.');
 
-    // 插入初始数据
+    // 检查并插入初始数据
     const initData = {
       notice: 'Welcome to our site!',
       banner: JSON.stringify([]),
     };
 
-    // 检查是否存在初始数据，如果不存在则插入
+    // 查询是否已有数据，如果没有则插入初始数据
     const mainInfo = await MainInfo.findOne();
     if (!mainInfo) {
       await MainInfo.create(initData);
+      console.log('Initial MainInfo data inserted.');
     }
   } catch (error) {
     console.error('Error initializing database:', error);
@@ -38,14 +42,15 @@ const initDatabase = async () => {
 };
 
 initDatabase().then(() => {
+  // 设置静态文件目录
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-  // Bodyparser middleware
+  // 使用 body-parser 中间件
   app.use(bodyParser.urlencoded({ extended: false }));
   app.use(bodyParser.json());
-  // Passport middleware
+  // 使用 Passport 中间件
   app.use(passport.initialize());
 
-  // Routes
+  // 设置路由
   app.use('/api/auth', auth);
   app.use('/api/user', user);
   app.use('/api/products', products);
@@ -55,19 +60,10 @@ initDatabase().then(() => {
   app.use('/api/roles', roles);
   app.use('/api/group', groups);
   app.use('/api/brand', brands);
+  app.use('/api/inventory', inventory);
+  app.use('/api/order', order);
 
   const port = process.env.PORT || 3001;
 
-  app.listen(port, () =>
-    console.log(`Server up and running on port ${port} !`)
-  );
+  app.listen(port, () => console.log(`Server up and running on port ${port}!`));
 });
-const checkConstraints = async () => {
-  const constraints = await sequelize.query(
-    "PRAGMA foreign_key_list('Admins')"
-  );
-  console.log('Admins Constraints:', constraints);
-};
-
-checkConstraints();
-module.exports = sequelize; // 导出 Sequelize 实例
